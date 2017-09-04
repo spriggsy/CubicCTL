@@ -1,3 +1,5 @@
+#include <EEPROM.h>   // needed to save calibration routine
+
 typedef unsigned char byte;
 
 template <class T> int EEPROM_writeAnything(int ee,const T& value)

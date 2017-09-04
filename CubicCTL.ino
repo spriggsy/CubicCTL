@@ -1,6 +1,6 @@
 #include "I2Cdev.h"
 #include "MPU6050_6Axis_MotionApps20.h"
-
+#include <avr/wdt.h>
 #include <SoftwareSerial.h>
 SoftwareSerial mySerial(3,4); // RX, TX
 
@@ -9,6 +9,13 @@ SoftwareSerial mySerial(3,4); // RX, TX
 
 int eepromAdr = 1;
 int calib = 0;
+
+//battery monitor settings
+int batMonPin = A7;    // input pin for the voltage divider
+float pinVoltage = 0; // variable to hold the calculated voltage
+float batteryVoltage = 0;
+
+
 
 
 // timer function
@@ -98,11 +105,14 @@ void setup() {
   pinMode(button4, INPUT_PULLUP);
   pinMode(button5, INPUT_PULLUP);
 
-  delay(250);
+  wdt_enable(WDTO_500MS);
+  
+  delay(15);
     
     // start bluetooth serial
     mySerial.begin(115200);
-  
+    mySerial.print("Starting...");
+
     // join I2C bus (I2Cdev library doesn't do this automatically)
     #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
         Wire.begin();
@@ -139,9 +149,10 @@ void setup() {
 
 
 void loop() {
-  
+  wdt_reset();
     //check and run calibration
     if (calib == 1) {
+      wdt_disable() //disable watchdog whilst calibrating
       EEPROM_readAnything(0,calibrate);
 
         state = 0;
@@ -168,6 +179,8 @@ void loop() {
         mySerial.print(",");
         mySerial.print("0");
         mySerial.print(",");
+        //mySerial.print("0");
+        //mySerial.print(",");
         mySerial.print(calib);
         mySerial.print(",");
         mySerial.println(">"); 
@@ -205,6 +218,7 @@ void loop() {
         //Now calibrated so move straight onto normal operation
         calib = 0;
       }    
+      wdt_enable()  // re-enable watchdog
     }
 
 
@@ -226,11 +240,20 @@ void loop() {
         while (mySerial.available() > 0) {         
           calib = mySerial.parseInt();          
         };
-       
-        //read button values
 
-        analogXMapped = map ((analogRead(analogPinX)),200,900,0,200);
-        analogYMapped = map ((analogRead(analogPinY)),200,900,0,200);
+
+       // read battery voltage
+         pinVoltage = (analogRead(batMonPin)) * 0.00488;       //  Calculate the voltage on the A/D pin
+                                    //  A reading of 1 for the A/D = 0.0048mV
+                                    //  if we multiply the A/D reading by 0.00488 then 
+                                    //  we get the voltage on the pin.                                  
+                                    
+  
+        batteryVoltage = pinVoltage * 1.86;;    //  Use the ratio calculated for the voltage divider
+            
+
+        analogXMapped = map ((analogRead(analogPinX)),0,1024,0,200);
+        analogYMapped = map ((analogRead(analogPinY)),0,1024,0,200);
 
         analogXMapped = constrain(analogXMapped, 0, 200);
         analogYMapped = constrain(analogYMapped, 0, 200);
@@ -297,6 +320,8 @@ void loop() {
         mySerial.print(",");
         mySerial.print(Be);
         mySerial.print(",");
+        //mySerial.print(batteryVoltage);
+        //mySerial.print(",");
         mySerial.print(Calibrating);
         mySerial.print(",");
         mySerial.println(">");
